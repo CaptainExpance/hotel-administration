@@ -13,13 +13,22 @@ public partial class Form1 : Form
     private int _userId;
     private string _role = "";
 
+    private readonly Label _lblAdmin = new() { AutoSize = true, Text = "Вход администратора:", Padding = new Padding(0, 6, 0, 0) };
     private readonly TextBox _login = new() { PlaceholderText = "Логин", Width = 130 };
     private readonly TextBox _password = new() { PlaceholderText = "Пароль", Width = 130, UseSystemPasswordChar = true };
     private readonly Button _btnLogin = new() { Text = "Войти", Width = 80 };
-    private readonly Label _lblRole = new() { AutoSize = true, Text = "Вход не выполнен", Padding = new Padding(0, 6, 0, 0) };
+    private readonly Button _btnLogout = new() { Text = "Выйти", Width = 80, Visible = false };
+    private readonly Label _lblRole = new() { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
     private readonly DataGridView _grid = new() { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false };
 
-    private readonly FlowLayoutPanel _adminPanel = new() { Dock = DockStyle.Top, Height = 50, Padding = new Padding(8), Visible = false };
+    private readonly FlowLayoutPanel _adminPanel = new()
+    {
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        Padding = new Padding(8),
+        Visible = false
+    };
     private readonly TextBox _number = new() { PlaceholderText = "Номер", Width = 70 };
     private readonly ComboBox _category = new() { Width = 110, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Button _btnAdd = new() { Text = "Добавить номер", Width = 120 };
@@ -34,8 +43,14 @@ public partial class Form1 : Form
         Width = 900;
         Height = 550;
 
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 45, Padding = new Padding(8) };
-        top.Controls.AddRange(new Control[] { _login, _password, _btnLogin, _lblRole });
+        var top = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(8)
+        };
+        top.Controls.AddRange(new Control[] { _lblAdmin, _login, _password, _btnLogin, _btnLogout, _lblRole });
 
         _adminPanel.Controls.AddRange(new Control[]
         {
@@ -46,7 +61,9 @@ public partial class Form1 : Form
         Controls.Add(_adminPanel);
         Controls.Add(top);
 
+        Load += (s, e) => Run(StartUserMode);
         _btnLogin.Click += (s, e) => Run(DoLogin);
+        _btnLogout.Click += (s, e) => Run(StartUserMode);
         _btnAdd.Click += (s, e) => Run(AddRoom);
         _btnChangePass.Click += (s, e) => Run(ChangePassword);
     }
@@ -60,35 +77,58 @@ public partial class Form1 : Form
     private static string Hash(string s) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(s)));
 
+    private void SetAdminUi(bool isAdmin)
+    {
+        _adminPanel.Visible = isAdmin;
+        _btnLogout.Visible = isAdmin;
+        _lblAdmin.Visible = !isAdmin;
+        _login.Visible = !isAdmin;
+        _password.Visible = !isAdmin;
+        _btnLogin.Visible = !isAdmin;
+    }
+
+    private void StartUserMode()
+    {
+        using var conn = new SqlConnection(ConnStr);
+        conn.Open();
+        using var cmd = new SqlCommand("SELECT UserID FROM USERS WHERE Login = N'user'", conn);
+        _userId = (int)cmd.ExecuteScalar()!;
+        _role = "user";
+
+        _login.Clear();
+        _password.Clear();
+        _lblRole.Text = "Режим: пользователь";
+        SetAdminUi(false);
+
+        LoadRooms();
+    }
+
     private void DoLogin()
     {
         using var conn = new SqlConnection(ConnStr);
         conn.Open();
 
         using var cmd = new SqlCommand(
-            @"SELECT u.UserID, r.Name
+            @"SELECT u.UserID
               FROM USERS u JOIN ROLES r ON r.RoleID = u.RoleID
-              WHERE u.Login = @login AND u.PasswordHash = @hash", conn);
+              WHERE u.Login = @login AND u.PasswordHash = @hash AND r.Name = N'admin'", conn);
         cmd.Parameters.AddWithValue("@login", _login.Text);
         cmd.Parameters.AddWithValue("@hash", Hash(_password.Text));
 
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read())
+        var id = cmd.ExecuteScalar();
+        if (id == null)
         {
-            reader.Close();
-            WriteLog(null, "Неудачный вход", "Логин: " + _login.Text);
-            MessageBox.Show("Неверный логин или пароль");
+            WriteLog(null, "Неудачный вход администратора", "Логин: " + _login.Text);
+            MessageBox.Show("Неверный логин или пароль администратора");
             return;
         }
 
-        _userId = reader.GetInt32(0);
-        _role = reader.GetString(1);
-        reader.Close();
+        _userId = (int)id;
+        _role = "admin";
+        _lblRole.Text = "Режим: администратор";
+        SetAdminUi(true);
 
-        _lblRole.Text = $"Вы вошли как: {_role}";
-        _adminPanel.Visible = _role == "admin";
-
-        WriteLog(_userId, "Вход в систему", null);
+        WriteLog(_userId, "Вход администратора", null);
         LoadCategories();
         LoadRooms();
     }

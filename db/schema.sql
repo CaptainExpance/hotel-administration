@@ -1,112 +1,134 @@
-   USE HotelDB;
-   GO
+IF DB_ID('HotelDB') IS NULL
+    CREATE DATABASE HotelDB;
+GO
 
--- 1-2. Ролевые таблицы
-CREATE TABLE Roles (
-    RoleId INT IDENTITY PRIMARY KEY,
-    RoleName NVARCHAR(30) NOT NULL UNIQUE
+USE HotelDB;
+GO
+
+CREATE TABLE ROLES (
+    RoleID INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(30) NOT NULL UNIQUE
 );
 
-CREATE TABLE Users (
-    UserId INT IDENTITY PRIMARY KEY,
+CREATE TABLE USERS (
+    UserID INT IDENTITY(1,1) PRIMARY KEY,
     Login NVARCHAR(50) NOT NULL UNIQUE,
-    PasswordHash NVARCHAR(200) NOT NULL,   -- только хеш, не пароль
-    RoleId INT NOT NULL REFERENCES Roles(RoleId),
-    IsActive BIT NOT NULL DEFAULT 1,
-    CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    PasswordHash NVARCHAR(200) NOT NULL,
+    RoleID INT NOT NULL,
+    FullName NVARCHAR(100) NOT NULL,
+    CONSTRAINT FK_USERS_ROLES FOREIGN KEY (RoleID) REFERENCES ROLES(RoleID)
 );
 
--- 3-4, 7, 9. Справочные таблицы
-CREATE TABLE RoomTypes (
-    RoomTypeId INT IDENTITY PRIMARY KEY,
+CREATE TABLE ROOM_CATEGORIES (
+    CategoryID INT IDENTITY(1,1) PRIMARY KEY,
     Name NVARCHAR(50) NOT NULL UNIQUE,
-    Capacity INT NOT NULL CHECK (Capacity > 0)
+    PricePerNight DECIMAL(10,2) NOT NULL CHECK (PricePerNight > 0)
 );
 
-CREATE TABLE RoomStatuses (
-    RoomStatusId INT IDENTITY PRIMARY KEY,
+CREATE TABLE ROOMS (
+    RoomID INT IDENTITY(1,1) PRIMARY KEY,
+    RoomNumber NVARCHAR(10) NOT NULL UNIQUE,
+    CategoryID INT NOT NULL,
+    CONSTRAINT FK_ROOMS_CATEGORIES FOREIGN KEY (CategoryID) REFERENCES ROOM_CATEGORIES(CategoryID)
+);
+
+CREATE TABLE GUESTS (
+    GuestID INT IDENTITY(1,1) PRIMARY KEY,
+    FullName NVARCHAR(100) NOT NULL,
+    PassportNumber NVARCHAR(20) NOT NULL UNIQUE,
+    Phone NVARCHAR(20) NULL
+);
+
+CREATE TABLE BOOKING_STATUSES (
+    StatusID INT IDENTITY(1,1) PRIMARY KEY,
     Name NVARCHAR(30) NOT NULL UNIQUE
 );
 
-CREATE TABLE BookingStatuses (
-    BookingStatusId INT IDENTITY PRIMARY KEY,
-    Name NVARCHAR(30) NOT NULL UNIQUE
-);
-
-CREATE TABLE Services (
-    ServiceId INT IDENTITY PRIMARY KEY,
+CREATE TABLE SERVICES (
+    ServiceID INT IDENTITY(1,1) PRIMARY KEY,
     Name NVARCHAR(100) NOT NULL UNIQUE,
     Price DECIMAL(10,2) NOT NULL CHECK (Price >= 0)
 );
 
--- 5-6, 8. Основные таблицы
-CREATE TABLE Rooms (
-    RoomId INT IDENTITY PRIMARY KEY,
-    Number NVARCHAR(10) NOT NULL UNIQUE,
-    Floor INT NOT NULL,
-    RoomTypeId INT NOT NULL REFERENCES RoomTypes(RoomTypeId),
-    RoomStatusId INT NOT NULL REFERENCES RoomStatuses(RoomStatusId),
-    Price DECIMAL(10,2) NOT NULL CHECK (Price > 0)
+CREATE TABLE BOOKINGS (
+    BookingID INT IDENTITY(1,1) PRIMARY KEY,
+    RoomID INT NOT NULL,
+    GuestID INT NOT NULL,
+    CheckInDate DATE NOT NULL,
+    CheckOutDate DATE NOT NULL,
+    StatusID INT NOT NULL,
+    CreatedByUserID INT NOT NULL,
+    CONSTRAINT CK_BOOKINGS_DATES CHECK (CheckOutDate > CheckInDate),
+    CONSTRAINT FK_BOOKINGS_ROOMS FOREIGN KEY (RoomID) REFERENCES ROOMS(RoomID),
+    CONSTRAINT FK_BOOKINGS_GUESTS FOREIGN KEY (GuestID) REFERENCES GUESTS(GuestID),
+    CONSTRAINT FK_BOOKINGS_STATUSES FOREIGN KEY (StatusID) REFERENCES BOOKING_STATUSES(StatusID),
+    CONSTRAINT FK_BOOKINGS_USERS FOREIGN KEY (CreatedByUserID) REFERENCES USERS(UserID)
 );
 
-CREATE TABLE Guests (
-    GuestId INT IDENTITY PRIMARY KEY,
-    LastName NVARCHAR(50) NOT NULL,
-    FirstName NVARCHAR(50) NOT NULL,
-    Phone NVARCHAR(20) NULL,
-    Email NVARCHAR(100) NULL,
-    PassportNumber NVARCHAR(20) NOT NULL UNIQUE
-);
-
-CREATE TABLE Bookings (
-    BookingId INT IDENTITY PRIMARY KEY,
-    GuestId INT NOT NULL REFERENCES Guests(GuestId),
-    RoomId INT NOT NULL REFERENCES Rooms(RoomId),
-    UserId INT NOT NULL REFERENCES Users(UserId),   -- кто оформил
-    BookingStatusId INT NOT NULL REFERENCES BookingStatuses(BookingStatusId),
-    CheckIn DATE NOT NULL,
-    CheckOut DATE NOT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-    CHECK (CheckOut > CheckIn)
-);
-
--- 10. Связующая таблица (многие ко многим)
-CREATE TABLE BookingServices (
-    BookingId INT NOT NULL REFERENCES Bookings(BookingId),
-    ServiceId INT NOT NULL REFERENCES Services(ServiceId),
+CREATE TABLE BOOKING_SERVICES (
+    BookingServiceID INT IDENTITY(1,1) PRIMARY KEY,
+    BookingID INT NOT NULL,
+    ServiceID INT NOT NULL,
     Quantity INT NOT NULL DEFAULT 1 CHECK (Quantity > 0),
-    PRIMARY KEY (BookingId, ServiceId)
+    CONSTRAINT FK_BS_BOOKINGS FOREIGN KEY (BookingID) REFERENCES BOOKINGS(BookingID),
+    CONSTRAINT FK_BS_SERVICES FOREIGN KEY (ServiceID) REFERENCES SERVICES(ServiceID)
 );
 
-CREATE TABLE Payments (
-    PaymentId INT IDENTITY PRIMARY KEY,
-    BookingId INT NOT NULL REFERENCES Bookings(BookingId),
+CREATE TABLE PAYMENTS (
+    PaymentID INT IDENTITY(1,1) PRIMARY KEY,
+    BookingID INT NOT NULL,
     Amount DECIMAL(10,2) NOT NULL CHECK (Amount > 0),
+    PaymentDate DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     Method NVARCHAR(30) NOT NULL,
-    PaidAt DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+    CONSTRAINT FK_PAYMENTS_BOOKINGS FOREIGN KEY (BookingID) REFERENCES BOOKINGS(BookingID)
 );
 
--- 12. Служебная таблица
-CREATE TABLE ActionLog (
-    LogId INT IDENTITY PRIMARY KEY,
-    UserId INT NULL REFERENCES Users(UserId),
-    Action NVARCHAR(200) NOT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME()
+CREATE TABLE ERROR_LOG (
+    LogID INT IDENTITY(1,1) PRIMARY KEY,
+    UserID INT NULL,
+    Action NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(500) NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT FK_ERRORLOG_USERS FOREIGN KEY (UserID) REFERENCES USERS(UserID)
+);
+
+CREATE TABLE PASSWORD_CHANGE_LOG (
+    ChangeID INT IDENTITY(1,1) PRIMARY KEY,
+    UserID INT NOT NULL,
+    ChangedAt DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    ChangedByUserID INT NOT NULL,
+    CONSTRAINT FK_PCL_USER FOREIGN KEY (UserID) REFERENCES USERS(UserID),
+    CONSTRAINT FK_PCL_ADMIN FOREIGN KEY (ChangedByUserID) REFERENCES USERS(UserID)
 );
 GO
 
--- Тестовые данные
-INSERT INTO Roles (RoleName) VALUES (N'admin'), (N'user');
+INSERT INTO ROLES (Name) VALUES (N'admin'), (N'user');
 
-INSERT INTO Users (Login, PasswordHash, RoleId) VALUES
- (N'admin', CONVERT(NVARCHAR(64), HASHBYTES('SHA2_256', 'admin123'), 2), 1),
- (N'user',  CONVERT(NVARCHAR(64), HASHBYTES('SHA2_256', 'user123'), 2), 2);
+INSERT INTO USERS (Login, PasswordHash, RoleID, FullName) VALUES
+    (N'admin', CONVERT(NVARCHAR(64), HASHBYTES('SHA2_256', 'admin123'), 2), 1, N'Администратор системы'),
+    (N'user', CONVERT(NVARCHAR(64), HASHBYTES('SHA2_256', 'user123'), 2), 2, N'Сотрудник ресепшн');
 
-INSERT INTO RoomTypes (Name, Capacity) VALUES (N'Стандарт', 2), (N'Люкс', 3);
-INSERT INTO RoomStatuses (Name) VALUES (N'Свободен'), (N'Занят'), (N'Уборка');
-INSERT INTO BookingStatuses (Name) VALUES (N'Новая'), (N'Заселён'), (N'Завершена'), (N'Отменена');
-INSERT INTO Services (Name, Price) VALUES (N'Завтрак', 500), (N'Трансфер', 1200);
+INSERT INTO ROOM_CATEGORIES (Name, PricePerNight) VALUES
+    (N'Стандарт', 3500),
+    (N'Комфорт', 5200),
+    (N'Люкс', 7800);
 
-INSERT INTO Rooms (Number, Floor, RoomTypeId, RoomStatusId, Price) VALUES
- (N'101', 1, 1, 1, 3500), (N'102', 1, 1, 2, 3500), (N'201', 2, 2, 1, 7800);
+INSERT INTO ROOMS (RoomNumber, CategoryID) VALUES
+    (N'101', 1),
+    (N'102', 1),
+    (N'201', 3);
+
+INSERT INTO GUESTS (FullName, PassportNumber, Phone) VALUES
+    (N'Петров Иван Сергеевич', N'4510 123456', N'+79001112233');
+
+INSERT INTO BOOKING_STATUSES (Name) VALUES (N'Новая'), (N'Заселён'), (N'Завершена'), (N'Отменена');
+
+INSERT INTO SERVICES (Name, Price) VALUES (N'Завтрак', 500), (N'Трансфер', 1200);
+
+INSERT INTO BOOKINGS (RoomID, GuestID, CheckInDate, CheckOutDate, StatusID, CreatedByUserID) VALUES
+    (2, 1, DATEADD(DAY, -1, CAST(GETDATE() AS DATE)), DATEADD(DAY, 2, CAST(GETDATE() AS DATE)), 2, 1);
+
+INSERT INTO BOOKING_SERVICES (BookingID, ServiceID, Quantity) VALUES (1, 1, 2);
+
+INSERT INTO PAYMENTS (BookingID, Amount, Method) VALUES (1, 3500, N'Карта');
 GO
