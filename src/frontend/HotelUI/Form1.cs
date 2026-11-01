@@ -7,17 +7,17 @@ namespace HotelUI;
 
 internal static class Theme
 {
-    public static readonly Color Sidebar = Color.FromArgb(24, 33, 56);
-    public static readonly Color SidebarHover = Color.FromArgb(44, 58, 94);
-    public static readonly Color Accent = Color.FromArgb(46, 196, 182);
-    public static readonly Color Bg = Color.FromArgb(243, 245, 250);
-    public static readonly Color Card = Color.White;
-    public static readonly Color Text = Color.FromArgb(28, 38, 64);
-    public static readonly Color Muted = Color.FromArgb(125, 135, 156);
-    public static readonly Color Green = Color.FromArgb(39, 174, 96);
-    public static readonly Color Red = Color.FromArgb(214, 69, 65);
-    public static readonly Color Orange = Color.FromArgb(230, 126, 34);
-    public static readonly Color Border = Color.FromArgb(228, 232, 240);
+    public static readonly Color Sidebar = Color.FromArgb(94, 24, 36);        // глубокий бордовый
+    public static readonly Color SidebarHover = Color.FromArgb(128, 40, 54);
+    public static readonly Color Accent = Color.FromArgb(185, 38, 56);        // насыщенный красный
+    public static readonly Color Bg = Color.FromArgb(247, 240, 230);          // бежевый фон
+    public static readonly Color Card = Color.FromArgb(255, 251, 245);        // тёплый белый
+    public static readonly Color Text = Color.FromArgb(62, 32, 32);           // тёмно-коричневый
+    public static readonly Color Muted = Color.FromArgb(158, 130, 118);
+    public static readonly Color Green = Color.FromArgb(104, 140, 84);        // оливковый
+    public static readonly Color Red = Color.FromArgb(192, 40, 52);
+    public static readonly Color Orange = Color.FromArgb(212, 142, 62);
+    public static readonly Color Border = Color.FromArgb(234, 220, 204);
 
     public static Color Lerp(Color a, Color b, float t) => Color.FromArgb(
         (int)(a.R + (b.R - a.R) * t),
@@ -52,8 +52,9 @@ internal sealed class NavButton : Control
     {
         Text = text;
         _accentText = accentText;
-        Dock = DockStyle.Top;
-        Height = 52;
+        Dock = DockStyle.Left;
+        Width = TextRenderer.MeasureText(text, ItemFont).Width + 56;
+        Height = 64;
         Cursor = Cursors.Hand;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -90,22 +91,22 @@ internal sealed class NavButton : Control
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.Clear(Theme.Sidebar);
 
-        var rect = new Rectangle(14, 4, Width - 28, Height - 8);
+        var rect = new Rectangle(4, 12, Width - 8, Height - 24);
         using (var path = Theme.RoundRect(rect, 10))
         using (var brush = new SolidBrush(Theme.Lerp(Theme.Sidebar, Theme.SidebarHover, _level)))
             g.FillPath(brush, path);
 
         if (_active)
         {
-            using var bar = new SolidBrush(Theme.Accent);
-            g.FillRectangle(bar, 0, 12, 4, Height - 24);
+            using var bar = new SolidBrush(Color.FromArgb(240, 200, 150));
+            g.FillRectangle(bar, 18, Height - 5, Width - 36, 3);
         }
 
         var color = _accentText
-            ? Theme.Accent
-            : Theme.Lerp(Color.FromArgb(170, 180, 205), Color.White, _level);
-        TextRenderer.DrawText(g, Text, ItemFont, new Rectangle(34, 0, Width - 40, Height), color,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            ? Color.FromArgb(240, 200, 150)
+            : Theme.Lerp(Color.FromArgb(226, 200, 188), Color.FromArgb(255, 246, 232), _level);
+        TextRenderer.DrawText(g, Text, ItemFont, new Rectangle(0, 0, Width, Height), color,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
     }
 
     protected override void Dispose(bool disposing)
@@ -150,8 +151,8 @@ internal sealed class StatCard : Control
 
     public StatCard()
     {
-        Size = new Size(230, 96);
-        Margin = new Padding(0, 0, 18, 0);
+        Size = new Size(244, 96);
+        Margin = new Padding(0, 0, 0, 16);
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                  ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         _timer.Tick += (s, e) =>
@@ -226,7 +227,9 @@ public partial class Form1 : Form
         PlaceholderText = "Поиск...",
         Width = 240,
         BorderStyle = BorderStyle.FixedSingle,
-        Font = new Font("Segoe UI", 10.5f)
+        Font = new Font("Segoe UI", 10.5f),
+        BackColor = Theme.Card,
+        ForeColor = Theme.Text
     };
     private readonly DataGridView _grid = new();
     private readonly Panel _holder = new() { Dock = DockStyle.Fill, BackColor = Theme.Bg };
@@ -252,7 +255,7 @@ public partial class Form1 : Form
         Opacity = 0;
 
         Controls.Add(BuildContent());
-        Controls.Add(BuildSidebar());
+        Controls.Add(BuildTopBar());
 
         _search.TextChanged += (s, e) => ApplyFilter();
         _slideTimer.Tick += (s, e) => SlideStep();
@@ -278,22 +281,14 @@ public partial class Form1 : Form
         timer.Start();
     }
 
-    private Control BuildSidebar()
+    private Control BuildTopBar()
     {
-        var panel = new Panel { Dock = DockStyle.Left, Width = 240, BackColor = Theme.Sidebar };
+        var bar = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Sidebar };
 
-        var login = new NavButton("Вход администратора", accentText: true) { Dock = DockStyle.Bottom };
+        // порядок важен: Dock.Left элементы добавляются от последнего к первому, логотип - самым последним
+        var login = new NavButton("Вход администратора", accentText: true) { Dock = DockStyle.Right };
         login.Click += (s, e) => MessageBox.Show("Здесь будет окно входа администратора");
-        panel.Controls.Add(login);
-
-        panel.Controls.Add(new Label
-        {
-            Text = "v0.1 · черновик дизайна",
-            Dock = DockStyle.Bottom,
-            Height = 36,
-            ForeColor = Theme.Muted,
-            TextAlign = ContentAlignment.MiddleCenter
-        });
+        bar.Controls.Add(login);
 
         var items = new (string Name, Action Open)[]
         {
@@ -312,20 +307,20 @@ public partial class Form1 : Form
                 item.Open();
             };
             _nav.Insert(0, button);
-            panel.Controls.Add(button);
+            bar.Controls.Add(button);
         }
 
-        panel.Controls.Add(new Label
+        bar.Controls.Add(new Label
         {
-            Text = "HOTEL ADMIN",
-            Dock = DockStyle.Top,
-            Height = 100,
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI", 17, FontStyle.Bold),
+            Text = "GRAND HOTEL",
+            Dock = DockStyle.Left,
+            Width = 230,
+            ForeColor = Color.FromArgb(255, 240, 220),
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
             TextAlign = ContentAlignment.MiddleCenter
         });
 
-        return panel;
+        return bar;
     }
 
     private Control BuildContent()
@@ -340,16 +335,22 @@ public partial class Form1 : Form
         StyleGrid();
         var card = new RoundedPanel { Dock = DockStyle.Fill };
         card.Controls.Add(_grid);
-        _holder.Controls.Add(card);
 
-        var cards = new FlowLayoutPanel
+        // левая колонка со статистикой
+        var left = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Height = 112,
+            Dock = DockStyle.Left,
+            Width = 264,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             BackColor = Theme.Bg,
-            Padding = new Padding(0, 8, 0, 8)
+            Padding = new Padding(0, 0, 20, 0)
         };
-        cards.Controls.AddRange(_cards);
+        left.Controls.AddRange(_cards);
+
+        // порядок важен: сначала Fill, потом Left
+        _holder.Controls.Add(card);
+        _holder.Controls.Add(left);
 
         var header = new Panel { Dock = DockStyle.Top, Height = 78, BackColor = Theme.Bg };
         header.Controls.Add(_subtitle);
@@ -360,7 +361,6 @@ public partial class Form1 : Form
         _search.BringToFront();
 
         content.Controls.Add(_holder);
-        content.Controls.Add(cards);
         content.Controls.Add(header);
         return content;
     }
@@ -372,7 +372,7 @@ public partial class Form1 : Form
             .SetValue(_grid, true);
 
         _grid.Dock = DockStyle.Fill;
-        _grid.BackgroundColor = Color.White;
+        _grid.BackgroundColor = Theme.Card;
         _grid.BorderStyle = BorderStyle.None;
         _grid.ReadOnly = true;
         _grid.AllowUserToAddRows = false;
@@ -380,19 +380,20 @@ public partial class Form1 : Form
         _grid.RowHeadersVisible = false;
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.GridColor = Color.FromArgb(234, 237, 243);
+        _grid.GridColor = Color.FromArgb(240, 228, 214);
         _grid.EnableHeadersVisualStyles = false;
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.ColumnHeadersHeight = 44;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.White;
+        _grid.ColumnHeadersDefaultCellStyle.BackColor = Theme.Card;
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Theme.Muted;
-        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.White;
+        _grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Theme.Card;
         _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 10, FontStyle.Bold);
         _grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
         _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 0, 0);
+        _grid.DefaultCellStyle.BackColor = Theme.Card;
         _grid.DefaultCellStyle.ForeColor = Theme.Text;
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(225, 247, 244);
+        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(250, 230, 222);
         _grid.DefaultCellStyle.SelectionForeColor = Theme.Text;
         _grid.DefaultCellStyle.Padding = new Padding(8, 0, 0, 0);
         _grid.RowTemplate.Height = 46;
@@ -421,9 +422,9 @@ public partial class Form1 : Form
 
     private static (Color Fore, Color Back) StatusColors(string status) => status switch
     {
-        "Свободен" or "Заселён" or "Завершена" => (Theme.Green, Color.FromArgb(226, 246, 235)),
-        "Занят" or "Отменена" => (Theme.Red, Color.FromArgb(251, 232, 231)),
-        _ => (Theme.Orange, Color.FromArgb(253, 240, 224))
+        "Свободен" or "Заселён" or "Завершена" => (Theme.Green, Color.FromArgb(234, 242, 226)),
+        "Занят" or "Отменена" => (Theme.Red, Color.FromArgb(250, 225, 225)),
+        _ => (Theme.Orange, Color.FromArgb(252, 238, 214))
     };
 
     private void ApplyFilter()
